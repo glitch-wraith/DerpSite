@@ -1,25 +1,54 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @import "animate.css";
-@plugin "daisyui";
 
-html,
-body {
-   font-family: 'Inter', Arial, Helvetica, sans-serif;
-}
-
-@keyframes carouselFadeIn {
-  from { opacity: 0; transform: translateY(20px); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.carouselFadeIn {
-  animation: carouselFadeIn 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
 }
 
-.hide-scrollbar::-webkit-scrollbar {
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+html, body {
+  font-family: 'Inter', Arial, Helvetica, sans-serif;
+  background-color: #111827;
+  color: white;
+}
+
+/* Smooth accordion transition */
+.transition-max-height {
+  transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hide scrollbar for changelog */
+.changelog-container::-webkit-scrollbar {
   display: none;
 }
 
+.changelog-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Reduced motion settings */
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
@@ -27,72 +56,4 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* Devices Page Styles */
-.devices-page .devices-error,
-.devices-page .devices-loading {
-  text-align: center;
-  padding: 2rem;
-  font-size: 1.2rem;
-}
-
-.devices-page .devices-error {
-  color: #e53e3e;
-}
-
-.devices-page .devices-loading {
-  color: #718096;
-}
-
-.devices-page .devices-placeholder-image {
-  opacity: 0.5;
-  filter: grayscale(100%);
-}
-
-.devices-card {
-  transition: all 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-}
-
-.devices-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-}
-
-.devices-card-expanded {
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-}
-
-.devices-accordion-content {
-  transition: max-height 0.4s ease-out, padding 0.4s ease-out;
-}
-
-.devices-maintainer-link {
-  transition: color 0.2s;
-}
-
-.devices-view-button {
-  transition: background-color 0.2s;
-}
-
-.devices-download-link {
-  transition: background-color 0.2s;
-}
-
-.devices-changelog-text::-webkit-scrollbar {
-  width: 8px;
-}
-
-.devices-changelog-text::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.devices-changelog-text::-webkit-scrollbar-thumb {
-  background: #c5c5c5;
-  border-radius: 4px;
-}
-
-.devices-changelog-text::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
 }

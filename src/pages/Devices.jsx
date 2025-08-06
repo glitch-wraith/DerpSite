@@ -1,267 +1,306 @@
+// src/components/Devices.jsx
 import React, { useState, useEffect } from 'react';
 
-const BRANDS = ['All', 'Xiaomi', 'Poco', 'Redmi', 'OnePlus', 'Nothing', 'Motorola', 'Google', 'Samsung'];
-
-const formatSize = bytes => {
+// Helper function to format file size
+const formatFileSize = (bytes) => {
   if (bytes < 1024) return bytes + ' B';
-  const kb = bytes / 1024;
-  if (kb < 1024) return kb.toFixed(1) + ' KB';
-  const mb = kb / 1024;
-  if (mb < 1024) return mb.toFixed(1) + ' MB';
-  const gb = mb / 1024;
-  return gb.toFixed(1) + ' GB';
+  else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+  else return (bytes / 1073741824).toFixed(1) + ' GB';
 };
 
-const formatDate = timestamp => {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+// Predefined brand list
+const BRAND_LIST = ['All', 'Xiaomi', 'Poco', 'Redmi', 'OnePlus', 'Nothing', 'Motorola', 'Other'];
+
+// Device card component
+const DeviceCard = ({ device, isExpanded, onExpand }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Get status badge color based on ROM type
+  const getStatusColor = (romtype) => {
+    switch (romtype) {
+      case 'Official': return 'bg-green-500';
+      case 'Community': return 'bg-blue-500';
+      case 'Beta': return 'bg-yellow-500';
+      default: return 'bg-gray-600';
+    }
+  };
+
+  return (
+    <div 
+      className={`bg-gray-800 rounded-xl overflow-hidden transition-all duration-300 ${
+        isHovered ? 'scale-[1.02] shadow-2xl' : 'shadow-lg'
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div 
+        className="p-5 cursor-pointer"
+        onClick={onExpand}
+      >
+        <div className="flex items-start space-x-4">
+          <div className="bg-gray-700 rounded-lg flex items-center justify-center w-16 h-16">
+            <div className="bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center">
+              <span className="text-xl font-bold text-gray-400">
+                {device.name.charAt(0)}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex-1">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-bold">{device.name}</h2>
+                <p className="text-gray-400 text-sm">{device.codename}</p>
+              </div>
+              {device.builds && device.builds.length > 0 && (
+                <span className={`${getStatusColor(device.builds[0].romtype)} text-xs px-2 py-1 rounded-full font-semibold`}>
+                  {device.builds[0].romtype}
+                </span>
+              )}
+            </div>
+            
+            <div className="mt-2 flex items-center">
+              <span className="text-gray-400 mr-2">Maintainer:</span>
+              <a 
+                href={`https://github.com/${device.maintainer}`} 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-teal-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                @{device.maintainer}
+              </a>
+            </div>
+            
+            <button 
+              className="mt-4 w-full py-2 bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white rounded-lg transition-all duration-300 font-medium"
+              onClick={(e) => {
+                e.stopPropagation();
+                // In a real app, you would navigate to the device detail page
+                alert(`Navigate to device page: ${device.codename}`);
+              }}
+            >
+              View Builds
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Accordion content */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
+        isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+      }`}>
+        <div className="border-t border-gray-700 p-5 bg-gray-750">
+          <h3 className="font-bold text-lg mb-3 text-teal-400">Available Builds</h3>
+          
+          {device.builds ? (
+            <ul className="space-y-2 mb-6">
+              {device.builds.map((build, index) => (
+                <li key={index} className="flex justify-between items-center bg-gray-900 p-3 rounded-lg">
+                  <div>
+                    <div className="font-medium">{build.version}</div>
+                    <div className="text-sm text-gray-400">
+                      {new Date(build.datetime * 1000).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-medium">{formatFileSize(build.size)}</div>
+                    <a 
+                      href={build.url} 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-400 hover:underline text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Download
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-center py-4 text-gray-400">Loading builds...</div>
+          )}
+          
+          <h3 className="font-bold text-lg mb-3 text-teal-400">Changelog</h3>
+          {device.changelog ? (
+            <pre className="whitespace-pre-wrap bg-gray-900 p-4 rounded-lg max-h-60 overflow-y-auto text-sm font-sans">
+              {device.changelog}
+            </pre>
+          ) : (
+            <div className="text-center py-4 text-gray-400">Loading changelog...</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
+// Main DevicesPage component
 const DevicesPage = () => {
   const [devices, setDevices] = useState([]);
-  const [deviceData, setDeviceData] = useState({});
+  const [filteredDevices, setFilteredDevices] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('All');
   const [expandedDevice, setExpandedDevice] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Extract brand from device name
+  const getBrandFromName = (deviceName) => {
+    const brand = BRAND_LIST.find(brand => 
+      brand !== 'All' && brand !== 'Other' && 
+      deviceName.toLowerCase().includes(brand.toLowerCase())
+    );
+    return brand || 'Other';
+  };
+
+  // Parse devices.txt content
+  const parseDevicesData = (text) => {
+    const blocks = text.trim().split('\n\n');
+    return blocks.map(block => {
+      const lines = block.split('\n').map(line => line.trim());
+      const nameMatch = lines[0].match(/(.+?)\s*\((.+?)\)/);
+      return {
+        name: nameMatch ? nameMatch[1] : lines[0],
+        codename: nameMatch ? nameMatch[2] : 'unknown',
+        maintainer: lines[1],
+        jsonUrl: lines[2],
+        changelogUrl: lines[3],
+        brand: nameMatch ? getBrandFromName(nameMatch[1]) : 'Other'
+      };
+    });
+  };
+
+  // Fetch all device data
   useEffect(() => {
-    const fetchDevices = async () => {
+    const fetchData = async () => {
       try {
-        const devicesResponse = await fetch('/devices.txt');
-        if (!devicesResponse.ok) throw new Error('Failed to load devices list');
+        // Fetch devices.txt
+        const response = await fetch('/devices.txt');
+        const text = await response.text();
+        const devicesData = parseDevicesData(text);
         
-        const text = await devicesResponse.text();
-        const lines = text.split('\n').filter(line => line.trim() !== '');
-        
-        const devicesList = [];
-        for (let i = 0; i < lines.length; i += 4) {
-          if (i + 3 >= lines.length) break;
-          
-          const nameLine = lines[i].trim();
-          const codenameMatch = nameLine.match(/\((.*?)\)$/);
-          
-          if (codenameMatch) {
-            devicesList.push({
-              name: nameLine.replace(`(${codenameMatch[1]})`, '').trim(),
-              codename: codenameMatch[1],
-              maintainer: lines[i + 1].trim(),
-              jsonUrl: lines[i + 2].trim(),
-              changelogUrl: lines[i + 3].trim()
-            });
-          }
-        }
-        
-        setDevices(devicesList);
-        
-        const deviceDataMap = {};
-        await Promise.all(devicesList.map(async device => {
-          try {
-            const [jsonRes, changelogRes] = await Promise.all([
-              fetch(device.jsonUrl),
-              fetch(device.changelogUrl)
-            ]);
-            
-            if (!jsonRes.ok || !changelogRes.ok) {
-              throw new Error(`Failed to fetch data for ${device.codename}`);
+        // Fetch builds and changelogs for each device
+        const devicesWithData = await Promise.all(
+          devicesData.map(async (device) => {
+            try {
+              const [buildsRes, changelogRes] = await Promise.all([
+                fetch(device.jsonUrl),
+                fetch(device.changelogUrl)
+              ]);
+              
+              return {
+                ...device,
+                builds: buildsRes.ok ? (await buildsRes.json()).response : null,
+                changelog: changelogRes.ok ? await changelogRes.text() : null
+              };
+            } catch (error) {
+              console.error(`Error fetching data for ${device.codename}:`, error);
+              return { ...device, builds: null, changelog: null };
             }
-            
-            const [jsonData, changelog] = await Promise.all([
-              jsonRes.json(),
-              changelogRes.text()
-            ]);
-            
-            const builds = jsonData.response || [];
-            deviceDataMap[device.codename] = { 
-              builds,
-              changelog,
-              status: builds[0]?.romtype || 'Unknown' 
-            };
-          } catch (err) {
-            console.error(`Error loading ${device.codename}:`, err);
-            deviceDataMap[device.codename] = { 
-              error: true,
-              builds: [],
-              changelog: 'Failed to load changelog',
-              status: 'Error'
-            };
-          }
-        }));
+          })
+        );
         
-        setDeviceData(deviceDataMap);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+        setDevices(devicesWithData);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading devices:', error);
+        setIsLoading(false);
       }
     };
 
-    fetchDevices();
+    fetchData();
   }, []);
 
-  const filteredDevices = devices.filter(device => {
-    const matchesSearch = searchTerm === '' || 
-      device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      device.codename.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesBrand = selectedBrand === 'All' || 
-      device.name.toLowerCase().startsWith(selectedBrand.toLowerCase());
-    
-    return matchesSearch && matchesBrand;
-  });
+  // Filter devices based on search term and brand
+  useEffect(() => {
+    const filtered = devices.filter(device => {
+      const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          device.codename.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesBrand = selectedBrand === 'All' || device.brand === selectedBrand;
+      return matchesSearch && matchesBrand;
+    });
+    setFilteredDevices(filtered);
+  }, [devices, searchTerm, selectedBrand]);
 
-  const handleCardClick = codename => {
-    setExpandedDevice(expandedDevice === codename ? null : codename);
+  // Get unique brands from devices
+  const getAvailableBrands = () => {
+    const brands = [...new Set(devices.map(device => device.brand))];
+    return ['All', ...BRAND_LIST.filter(brand => 
+      brand !== 'All' && brands.includes(brand)
+    )];
   };
 
-  if (error) return <div className="devices-error text-center py-8">Error: {error}</div>;
-  if (loading) return <div className="devices-loading text-center py-8">Loading devices...</div>;
-
   return (
-    <div className="devices-page p-4 max-w-7xl mx-auto">
-      <div className="devices-search-container mb-6">
-        <input
-          type="text"
-          placeholder="Search devices..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-        />
-      </div>
-
-      <div className="devices-brand-filter flex flex-wrap gap-2 mb-8">
-        {BRANDS.map(brand => (
-          <button
-            key={brand}
-            className={`devices-brand-pill px-4 py-2 rounded-full border transition-all ${
-              selectedBrand === brand 
-                ? 'bg-blue-500 text-white border-blue-500' 
-                : 'bg-white border-gray-300 hover:bg-gray-100'
-            }`}
-            onClick={() => setSelectedBrand(brand)}
-          >
-            {brand}
-          </button>
-        ))}
-      </div>
-
-      <div className="devices-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredDevices.map(device => {
-          const data = deviceData[device.codename] || {};
-          const isExpanded = expandedDevice === device.codename;
-          const status = data.status;
-          
-          return (
-            <div 
-              key={device.codename}
-              className={`devices-card border border-gray-200 rounded-xl overflow-hidden bg-white transition-all ${
-                isExpanded ? 'devices-card-expanded shadow-xl' : 'shadow-md hover:shadow-lg hover:-translate-y-1'
+    <div className="bg-gray-900 text-white min-h-screen p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-bold mb-8 text-center animate-fadeIn">
+          Supported Devices
+        </h1>
+        
+        {/* Search input */}
+        <div className="mb-8 animate-fadeInUp">
+          <input
+            type="text"
+            placeholder="Search devices..."
+            className="w-full p-4 rounded-xl bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        
+        {/* Brand filter pills */}
+        <div className="flex flex-wrap gap-2 mb-8 justify-center animate-fadeInUp">
+          {getAvailableBrands().map(brand => (
+            <button
+              key={brand}
+              className={`px-4 py-2 rounded-full transition-all duration-300 ${
+                selectedBrand === brand
+                  ? 'bg-gradient-to-r from-teal-400 to-green-400 text-gray-900 font-bold'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
               }`}
+              onClick={() => setSelectedBrand(brand)}
             >
-              <div 
-                className="devices-card-content p-6 cursor-pointer"
-                onClick={() => handleCardClick(device.codename)}
-              >
-                <div className="devices-image-container flex justify-center mb-4 bg-gray-50 rounded-lg p-4 min-h-[200px] items-center">
-                  <img
-                    src={`/img/devices/${device.codename}.png`}
-                    alt={device.name}
-                    onError={e => {
-                      e.target.src = '/img/devices/placeholder.png';
-                      e.target.classList.add('devices-placeholder-image');
-                    }}
-                    className="devices-image max-h-[180px] max-w-full object-contain"
-                  />
-                </div>
-                
-                <div className="devices-info mb-4">
-                  <h3 className="text-xl font-bold mb-1">{device.name}</h3>
-                  <p className="devices-codename text-gray-500 italic mb-2">{device.codename}</p>
-                  <p className="mb-2">
-                    Maintainer:{' '}
-                    <a 
-                      href={`https://github.com/${device.maintainer}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="devices-maintainer-link text-blue-500 hover:text-blue-700 hover:underline transition-colors"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      @{device.maintainer}
-                    </a>
-                  </p>
-                  <span className={`devices-status inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                    status === 'Official' ? 'bg-green-100 text-green-800' : 
-                    status === 'Community' ? 'bg-blue-100 text-blue-800' : 
-                    status === 'Beta' ? 'bg-yellow-100 text-yellow-800' : 
-                    status === 'Discontinued' ? 'bg-red-100 text-red-800' : 
-                    'bg-purple-100 text-purple-800'
-                  }`}>
-                    {status}
-                  </span>
-                </div>
-                
-                <button className="devices-view-button bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-colors self-start mt-auto">
-                  {isExpanded ? 'Hide Builds' : 'View Builds'}
-                </button>
-              </div>
-
-              <div className={`devices-accordion-content overflow-hidden transition-all duration-400 ${
-                isExpanded ? 'max-h-[1000px] py-0 px-6 pb-6' : 'max-h-0'
-              }`}>
-                {data.builds?.length > 0 ? (
-                  <div className="devices-builds-container mt-6">
-                    <h4 className="text-lg font-semibold mb-3">Available Builds:</h4>
-                    <ul className="space-y-3">
-                      {data.builds.map((build, index) => (
-                        <li key={index} className="devices-build-item">
-                          <a 
-                            href={build.url} 
-                            download
-                            className="devices-download-link block p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <div className="devices-build-header flex justify-between items-center mb-2">
-                              <span className="devices-build-version font-semibold">{build.version}</span>
-                              <span className={`devices-build-type px-2 py-1 rounded text-xs font-medium ${
-                                build.romtype === 'Official' ? 'bg-green-100 text-green-800' : 
-                                build.romtype === 'Beta' ? 'bg-yellow-100 text-yellow-800' : 
-                                build.romtype === 'Community' ? 'bg-blue-100 text-blue-800' : 
-                                'bg-purple-100 text-purple-800'
-                              }`}>
-                                {build.romtype}
-                              </span>
-                            </div>
-                            <div className="devices-build-meta flex justify-between text-gray-500 text-sm mb-1">
-                              <span>{formatDate(build.datetime)}</span>
-                              <span>{formatSize(build.size)}</span>
-                            </div>
-                            <div className="devices-filename text-gray-700 text-sm truncate">
-                              {build.filename}
-                            </div>
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="py-4 text-gray-500">No builds available</p>
+              {brand}
+            </button>
+          ))}
+        </div>
+        
+        {/* Loading state */}
+        {isLoading && (
+          <div className="text-center py-20">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div>
+            <p className="mt-4 text-gray-400">Loading devices...</p>
+          </div>
+        )}
+        
+        {/* Devices grid */}
+        {!isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeInUp">
+            {filteredDevices.map(device => (
+              <DeviceCard
+                key={device.codename}
+                device={device}
+                isExpanded={expandedDevice === device.codename}
+                onExpand={() => setExpandedDevice(
+                  expandedDevice === device.codename ? null : device.codename
                 )}
-                
-                <div className="devices-changelog-container mt-6">
-                  <h4 className="text-lg font-semibold mb-3">Changelog:</h4>
-                  <pre className="devices-changelog-text bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-[300px] overflow-y-auto whitespace-pre-wrap text-sm">
-                    {data.changelog || 'No changelog available'}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+              />
+            ))}
+          </div>
+        )}
+        
+        {/* Empty state */}
+        {!isLoading && filteredDevices.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-5xl mb-4">😢</div>
+            <h3 className="text-xl font-semibold">No devices found</h3>
+            <p className="text-gray-400 mt-2">
+              Try adjusting your search or filter criteria
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
