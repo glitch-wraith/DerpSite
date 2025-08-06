@@ -1,286 +1,270 @@
 import React, { useState, useEffect } from 'react';
 
-const DeviceImage = ({ imageUrl, deviceName }) => {
-  const [hasError, setHasError] = useState(false);
+const BRANDS = ['All', 'Xiaomi', 'Poco', 'Redmi', 'OnePlus', 'Nothing', 'Motorola', 'Google', 'Samsung'];
 
-  useEffect(() => {
-    setHasError(false);
-  }, [imageUrl]);
-
-  return (
-    <div className="device-image h-56 flex items-center justify-center overflow-hidden relative">
-      {!hasError ? (
-        <div className="relative w-full h-full flex items-center justify-center">
-          <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-black/80 to-black z-0"></div>
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-800/50 to-transparent z-0"></div>
-          <img
-            src={imageUrl}
-            alt={deviceName}
-            className="w-3/4 h-full object-contain z-10 transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:rotate-2 group-hover:drop-shadow-glow"
-          />
-          <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black to-transparent z-10"></div>
-          <div className="absolute bottom-5 left-5 text-xl font-bold text-white z-20 text-shadow transition-transform duration-300 group-hover:translate-x-1">
-            {deviceName}
-          </div>
-        </div>
-      ) : (
-        <div className='image-placeholder text-5xl text-white/15'>
-          <i className='fas fa-mobile-alt'></i>
-        </div>
-      )}
-    </div>
-  );
+const formatSize = bytes => {
+  if (bytes < 1024) return bytes + ' B';
+  const kb = bytes / 1024;
+  if (kb < 1024) return kb.toFixed(1) + ' KB';
+  const mb = kb / 1024;
+  if (mb < 1024) return mb.toFixed(1) + ' MB';
+  const gb = mb / 1024;
+  return gb.toFixed(1) + ' GB';
 };
 
-const Devices = () => {
-  const GITHUB_REPO = 'DerpFest-AOSP/Updater-Stuff';
-  const GITHUB_BASE_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/master/`;
-  const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/contents/`;
-  const DEVICE_IMAGE_BASE = 'https://wiki.lineageos.org/images/devices/';
-  const DEVICES_PER_PAGE = 15;
-  
-  const [allDevices, setAllDevices] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [maintainersData, setMaintainersData] = useState({});
+const formatDate = timestamp => {
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const DevicesPage = () => {
+  const [devices, setDevices] = useState([]);
+  const [deviceData, setDeviceData] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('All');
+  const [expandedDevice, setExpandedDevice] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [deviceDetails, setDeviceDetails] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [changelogContent, setChangelogContent] = useState('');
-  const [changelogDevice, setChangelogDevice] = useState('');
-  const [pageChanging, setPageChanging] = useState(false);
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (timestamp) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-  
-  const getDeviceName = (filename) => filename.replace('.json', '').replace(/_/g, ' ');
-  const getDeviceImageUrl = (deviceName) => `${DEVICE_IMAGE_BASE}${deviceName.replace(/ /g, '_')}.png`;
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const initialize = async () => {
-      setLoading(true);
+    const fetchDevices = async () => {
       try {
-        const maintResponse = await fetch(`${GITHUB_BASE_URL}maintainers.json`);
-        if (maintResponse.ok) {
-          const rawData = await maintResponse.json();
-          // Transform keys to match our device name format
-          const transformedData = {};
-          Object.keys(rawData).forEach(key => {
-            const normalizedKey = key.replace(/_/g, ' ');
-            transformedData[normalizedKey] = rawData[key];
-          });
-          setMaintainersData(transformedData);
+        const devicesResponse = await fetch('/devices.txt');
+        if (!devicesResponse.ok) throw new Error('Failed to load devices list');
+        
+        const text = await devicesResponse.text();
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        const devicesList = [];
+        for (let i = 0; i < lines.length; i += 4) {
+          if (i + 3 >= lines.length) break;
+          
+          const nameLine = lines[i].trim();
+          const codenameMatch = nameLine.match(/\((.*?)\)$/);
+          
+          if (codenameMatch) {
+            devicesList.push({
+              name: nameLine.replace(`(${codenameMatch[1]})`, '').trim(),
+              codename: codenameMatch[1],
+              maintainer: lines[i + 1].trim(),
+              jsonUrl: lines[i + 2].trim(),
+              changelogUrl: lines[i + 3].trim()
+            });
+          }
         }
-      } catch (error) {
-        console.error('Error fetching maintainers:', error);
-      }
-      try {
-        const devicesResponse = await fetch(GITHUB_API_URL);
-        if (!devicesResponse.ok) throw new Error(`GitHub API error`);
-        const files = await devicesResponse.json();
-        const jsonFiles = files.filter(file => 
-          file.name.endsWith('.json') && !file.name.includes('changelog') && !file.name.includes('maintainers') && file.type === 'file'
-        );
-        const devices = jsonFiles.map(file => ({
-          filename: file.name,
-          name: getDeviceName(file.name),
-          imageUrl: getDeviceImageUrl(getDeviceName(file.name))
+        
+        setDevices(devicesList);
+        
+        const deviceDataMap = {};
+        await Promise.all(devicesList.map(async device => {
+          try {
+            const [jsonRes, changelogRes] = await Promise.all([
+              fetch(device.jsonUrl),
+              fetch(device.changelogUrl)
+            ]);
+            
+            if (!jsonRes.ok || !changelogRes.ok) {
+              throw new Error(`Failed to fetch data for ${device.codename}`);
+            }
+            
+            const [jsonData, changelog] = await Promise.all([
+              jsonRes.json(),
+              changelogRes.text()
+            ]);
+            
+            const builds = jsonData.response || [];
+            deviceDataMap[device.codename] = { 
+              builds,
+              changelog,
+              status: builds[0]?.romtype || 'Unknown' 
+            };
+          } catch (err) {
+            console.error(`Error loading ${device.codename}:`, err);
+            deviceDataMap[device.codename] = { 
+              error: true,
+              builds: [],
+              changelog: 'Failed to load changelog',
+              status: 'Error'
+            };
+          }
         }));
-        setAllDevices(devices);
-      } catch (error) {
-        console.error('Error fetching devices:', error);
+        
+        setDeviceData(deviceDataMap);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    initialize();
+
+    fetchDevices();
   }, []);
 
-  useEffect(() => {
-    const fetchPageDetails = async () => {
-      setPageChanging(true);
-      const filtered = allDevices.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
-      setTotalPages(Math.ceil(filtered.length / DEVICES_PER_PAGE));
-      
-      const startIndex = (currentPage - 1) * DEVICES_PER_PAGE;
-      const devicesOnPage = filtered.slice(startIndex, startIndex + DEVICES_PER_PAGE);
+  const filteredDevices = devices.filter(device => {
+    const matchesSearch = searchTerm === '' || 
+      device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      device.codename.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesBrand = selectedBrand === 'All' || 
+      device.name.toLowerCase().startsWith(selectedBrand.toLowerCase());
+    
+    return matchesSearch && matchesBrand;
+  });
 
-      if (devicesOnPage.length === 0) {
-        setDeviceDetails([]);
-        setPageChanging(false);
-        return;
-      }
-      const details = await Promise.all(
-        devicesOnPage.map(async (device) => {
-          try {
-            const res = await fetch(GITHUB_BASE_URL + device.filename);
-            if (!res.ok) return null;
-            const data = await res.json();
-            return (data.response && data.response.length > 0) ? { device, build: data.response[0] } : null;
-          } catch { return null; }
-        })
-      );
-      setDeviceDetails(details.filter(Boolean));
-      setTimeout(() => setPageChanging(false), 300);
-    };
-    if (!loading) fetchPageDetails();
-  }, [allDevices, currentPage, searchTerm, loading]);
-  
-  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
-
-  const handleShowChangelog = async (deviceName) => {
-    setChangelogDevice(deviceName);
-    setShowModal(true);
-    setChangelogContent('Loading changelog...');
-    try {
-      const res = await fetch(`${GITHUB_BASE_URL}changelog_${deviceName.replace(/ /g, '_')}.txt`);
-      if (!res.ok) throw new Error('Not found');
-      setChangelogContent(await res.text());
-    } catch {
-      setChangelogContent(`Changelog not available for ${deviceName}.`);
-    }
+  const handleCardClick = codename => {
+    setExpandedDevice(expandedDevice === codename ? null : codename);
   };
 
-  const filteredDevices = allDevices.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
-      setPageChanging(true);
-      setTimeout(() => {
-        setCurrentPage(newPage);
-      }, 300);
-    }
-  };
+  if (error) return <div className="devices-error text-center py-8">Error: {error}</div>;
+  if (loading) return <div className="devices-loading text-center py-8">Loading devices...</div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-700 text-slate-100 pb-8">
-      <header className="bg-slate-900/80 backdrop-blur-md p-6 text-center top-0 z-50">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <i className="fas fa-download text-4xl text-emerald-400"></i>
-          <h1 className="text-4xl font-extrabold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">DerpFest Downloads</h1>
-        </div>
-        <h2 className="text-slate-400 text-lg max-w-2xl mx-auto">Browse and download the latest builds for supported devices</h2>
-      </header>
-      <div className="flex justify-center gap-4 my-6 max-w-6xl mx-auto px-4 flex-wrap">
-        <div className="relative flex-1 max-w-lg">
-          <i className="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
-          <input 
-            type="text" 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            placeholder="Search devices..." 
-            className="w-full pl-12 pr-4 py-3 rounded-full border-2 border-slate-600 bg-slate-900/70 text-slate-100 text-base transition-all focus:outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/30"
-          />
-        </div>
-        <div className="flex items-center bg-slate-900/70 px-5 py-2.5 rounded-full text-sm border-2 border-slate-600">
-          <i className="fas fa-mobile-alt mr-2 text-emerald-400"></i>
-          <span>{loading ? 'Loading...' : `${filteredDevices.length} devices found`}</span>
-        </div>
+    <div className="devices-page p-4 max-w-7xl mx-auto">
+      <div className="devices-search-container mb-6">
+        <input
+          type="text"
+          placeholder="Search devices..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+        />
       </div>
-      
-      <div className="max-w-7xl mx-auto px-4">
-        {loading ? (
-          <div className="text-center py-12 slide-up">
-            <div className="w-12 h-12 border-4 border-slate-600 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4"></div>
-            <p>Fetching device information...</p>
-          </div>
-        ) : (
-          <>
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-4 ${pageChanging ? 'opacity-50 transition-opacity duration-300' : 'opacity-100 transition-opacity duration-300'}`}>
-              {deviceDetails.length > 0 ? (
-                deviceDetails.map(({ device, build }, index) => (
-                  <div 
-                    key={`${device.name}-${currentPage}`}
-                    className="group bg-white rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl border border-slate-700 flex flex-col h-full card-appear"
-                    style={{ 
-                      animationDelay: `${index * 50}ms`,
-                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+
+      <div className="devices-brand-filter flex flex-wrap gap-2 mb-8">
+        {BRANDS.map(brand => (
+          <button
+            key={brand}
+            className={`devices-brand-pill px-4 py-2 rounded-full border transition-all ${
+              selectedBrand === brand 
+                ? 'bg-blue-500 text-white border-blue-500' 
+                : 'bg-white border-gray-300 hover:bg-gray-100'
+            }`}
+            onClick={() => setSelectedBrand(brand)}
+          >
+            {brand}
+          </button>
+        ))}
+      </div>
+
+      <div className="devices-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredDevices.map(device => {
+          const data = deviceData[device.codename] || {};
+          const isExpanded = expandedDevice === device.codename;
+          const status = data.status;
+          
+          return (
+            <div 
+              key={device.codename}
+              className={`devices-card border border-gray-200 rounded-xl overflow-hidden bg-white transition-all ${
+                isExpanded ? 'devices-card-expanded shadow-xl' : 'shadow-md hover:shadow-lg hover:-translate-y-1'
+              }`}
+            >
+              <div 
+                className="devices-card-content p-6 cursor-pointer"
+                onClick={() => handleCardClick(device.codename)}
+              >
+                <div className="devices-image-container flex justify-center mb-4 bg-gray-50 rounded-lg p-4 min-h-[200px] items-center">
+                  <img
+                    src={`/img/devices/${device.codename}.png`}
+                    alt={device.name}
+                    onError={e => {
+                      e.target.src = '/img/devices/placeholder.png';
+                      e.target.classList.add('devices-placeholder-image');
                     }}
-                  >
-                    <DeviceImage imageUrl={device.imageUrl} deviceName={device.name} />
-                    <div className="p-5 flex-1 flex flex-col text-gray-800">
-                      <div className="flex items-center mb-6">
-                        <div className="w-12 h-12 bg-gradient-to-r from-cyan-400 to-emerald-400 rounded-lg flex items-center justify-center mr-4 text-2xl text-white transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12">
-                          <i className="fas fa-user-cog"></i>
-                        </div>
-                        <div className="text-lg">Maintainer: <strong className="font-semibold">{maintainersData[device.name] || 'Unknown'}</strong></div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 mb-5">
-                        <div className="bg-slate-100 p-3 rounded-lg"><div className="text-xs text-slate-600 mb-1">Version</div><div className="font-semibold text-slate-900">{build.version}</div></div>
-                        <div className="bg-slate-100 p-3 rounded-lg"><div className="text-xs text-slate-600 mb-1">Date</div><div className="font-semibold text-slate-900">{formatDate(build.datetime)}</div></div>
-                        <div className="bg-slate-100 p-3 rounded-lg"><div className="text-xs text-slate-600 mb-1">Size</div><div className="font-semibold text-slate-900">{formatFileSize(build.size)}</div></div>
-                        <div className="bg-slate-100 p-3 rounded-lg"><div className="text-xs text-slate-600 mb-1">Type</div><div className="font-semibold text-slate-900">{build.romtype}</div></div>
-                      </div>
-                      <div className="flex gap-3 mt-auto">
-                        <a href={build.url} target="_blank" rel="noopener noreferrer" className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white py-3 rounded-lg font-semibold transition-all hover:opacity-90 hover:-translate-y-1 flex items-center justify-center gap-2 shadow-lg">
-                          <i className="fas fa-download"></i> Download
-                        </a>
-                        <button onClick={() => handleShowChangelog(device.name)} className="flex-1 bg-gradient-to-r from-emerald-500 to-green-500 text-white py-3 rounded-lg font-semibold transition-all hover:opacity-90 hover:-translate-y-1 flex items-center justify-center gap-2 shadow-lg">
-                          <i className="fas fa-file-alt"></i> Changelog
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-full text-center py-12 bg-slate-800/50 rounded-xl fade-in">
-                  <i className="fas fa-search-minus text-5xl mb-4 text-slate-400"></i>
-                  <h3 className="text-xl font-semibold mb-2">No Devices Found</h3>
-                  <p className="text-slate-400">Please try adjusting your search term.</p>
+                    className="devices-image max-h-[180px] max-w-full object-contain"
+                  />
                 </div>
-              )}
-            </div>
+                
+                <div className="devices-info mb-4">
+                  <h3 className="text-xl font-bold mb-1">{device.name}</h3>
+                  <p className="devices-codename text-gray-500 italic mb-2">{device.codename}</p>
+                  <p className="mb-2">
+                    Maintainer:{' '}
+                    <a 
+                      href={`https://github.com/${device.maintainer}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="devices-maintainer-link text-blue-500 hover:text-blue-700 hover:underline transition-colors"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      @{device.maintainer}
+                    </a>
+                  </p>
+                  <span className={`devices-status inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                    status === 'Official' ? 'bg-green-100 text-green-800' : 
+                    status === 'Community' ? 'bg-blue-100 text-blue-800' : 
+                    status === 'Beta' ? 'bg-yellow-100 text-yellow-800' : 
+                    status === 'Discontinued' ? 'bg-red-100 text-red-800' : 
+                    'bg-purple-100 text-purple-800'
+                  }`}>
+                    {status}
+                  </span>
+                </div>
+                
+                <button className="devices-view-button bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-colors self-start mt-auto">
+                  {isExpanded ? 'Hide Builds' : 'View Builds'}
+                </button>
+              </div>
 
-            <div className="flex justify-center items-center gap-2 mt-8 slide-up">
-              <button 
-                onClick={() => handlePageChange(currentPage - 1)} 
-                disabled={currentPage === 1} 
-                className="bg-cyan-500 text-white border-none rounded-lg px-6 py-3 cursor-pointer transition-all hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center gap-2 shadow-md"
-              >
-                <i className="fas fa-chevron-left"></i> Previous
-              </button>
-              <span className="mx-4 text-lg">Page {currentPage} of {totalPages || 1}</span>
-              <button 
-                onClick={() => handlePageChange(currentPage + 1)} 
-                disabled={currentPage >= totalPages} 
-                className="bg-cyan-500 text-white border-none rounded-lg px-6 py-3 cursor-pointer transition-all hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center gap-2 shadow-md"
-              >
-                Next <i className="fas fa-chevron-right"></i>
-              </button>
+              <div className={`devices-accordion-content overflow-hidden transition-all duration-400 ${
+                isExpanded ? 'max-h-[1000px] py-0 px-6 pb-6' : 'max-h-0'
+              }`}>
+                {data.builds?.length > 0 ? (
+                  <div className="devices-builds-container mt-6">
+                    <h4 className="text-lg font-semibold mb-3">Available Builds:</h4>
+                    <ul className="space-y-3">
+                      {data.builds.map((build, index) => (
+                        <li key={index} className="devices-build-item">
+                          <a 
+                            href={build.url} 
+                            download
+                            className="devices-download-link block p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <div className="devices-build-header flex justify-between items-center mb-2">
+                              <span className="devices-build-version font-semibold">{build.version}</span>
+                              <span className={`devices-build-type px-2 py-1 rounded text-xs font-medium ${
+                                build.romtype === 'Official' ? 'bg-green-100 text-green-800' : 
+                                build.romtype === 'Beta' ? 'bg-yellow-100 text-yellow-800' : 
+                                build.romtype === 'Community' ? 'bg-blue-100 text-blue-800' : 
+                                'bg-purple-100 text-purple-800'
+                              }`}>
+                                {build.romtype}
+                              </span>
+                            </div>
+                            <div className="devices-build-meta flex justify-between text-gray-500 text-sm mb-1">
+                              <span>{formatDate(build.datetime)}</span>
+                              <span>{formatSize(build.size)}</span>
+                            </div>
+                            <div className="devices-filename text-gray-700 text-sm truncate">
+                              {build.filename}
+                            </div>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="py-4 text-gray-500">No builds available</p>
+                )}
+                
+                <div className="devices-changelog-container mt-6">
+                  <h4 className="text-lg font-semibold mb-3">Changelog:</h4>
+                  <pre className="devices-changelog-text bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-[300px] overflow-y-auto whitespace-pre-wrap text-sm">
+                    {data.changelog || 'No changelog available'}
+                  </pre>
+                </div>
+              </div>
             </div>
-          </>
-        )}
+          );
+        })}
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 fade-in" onClick={() => setShowModal(false)}>
-          <div className="bg-slate-800 w-full max-w-4xl rounded-xl shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white flex justify-between items-center">
-              <h2 className="text-2xl font-semibold">Changelog: {changelogDevice}</h2>
-              <button onClick={() => setShowModal(false)} className="bg-transparent border-none text-white text-3xl cursor-pointer transition-transform hover:scale-110">&times;</button>
-            </div>
-            <div className="p-6 overflow-y-auto bg-slate-900">
-              <pre className="whitespace-pre-wrap font-mono leading-relaxed text-slate-300">{changelogContent}</pre>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default Devices;
+export default DevicesPage;
